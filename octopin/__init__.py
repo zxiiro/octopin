@@ -6,9 +6,7 @@
 #  SPDX-License-Identifier: EPL-2.0
 #  *******************************************************************************
 
-from ._version import __version__
-
 __appname__ = "octopin"
-__version__ = __version__
+__version__ = "0.1.0"
 
 __all__ = ["__version__"]

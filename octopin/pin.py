@@ -13,7 +13,7 @@ import difflib
 import logging
 import os.path
 import re
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, List
 
 import typer
 from rich import print
@@ -28,9 +28,7 @@ app = typer.Typer()
 
 _logger = logging.getLogger(__name__)
 
-
-@app.command()
-def pin(
+def _pin(
     workflow: Annotated[str, typer.Argument(help="Workflow to process")],
     diff_mode: Annotated[
         bool,
@@ -51,7 +49,6 @@ def pin(
     """
     Pin actions used in workflows.
     """
-
     workflow_ref = ActionRef.of_pattern(workflow)
     workflow_file, pinned_lines = asyncio.run(_handle_async(workflow_ref, token))
 
@@ -80,6 +77,41 @@ def pin(
 
     return 0
 
+@app.command()
+def pin(
+    workflows: Annotated[
+        List[str],
+        typer.Argument(help="Workflow files to process", min=1)
+    ],
+    diff_mode: Annotated[
+        bool,
+        typer.Option("--diff", "-d", help="Show diffs."),
+    ] = False,
+    inplace_mode: Annotated[
+        bool,
+        typer.Option(
+            "--inplace", "-i", help="Modify input workflow inplace, not taken into account when `--diff` is enabled."
+        ),
+    ] = False,
+    token: Annotated[
+        str | None,
+        typer.Option(help="GitHub token to use."),
+    ] = None,
+    verbose: bool = typer.Option(False, help="Enable verbose output"),
+) -> int:
+    """
+    Pin actions used in multiple workflows by calling `pin` for each workflow.
+    """
+    return_code = 0
+
+    for workflow in workflows:
+        print(f"\n[bold]Processing workflow: {workflow}[/]")
+        result = _pin(workflow, diff_mode, inplace_mode, token, verbose)
+        if result != 0:
+            print(f"[red]Failed to process {workflow}[/]")
+            return_code = 1  # Mark failure but continue processing
+
+    return return_code
 
 async def _handle_async(workflow_ref: ActionRef, token: str | None) -> tuple[WorkflowFile | None, list[str]]:
     async with GitHubAPI(token) as gh_api:
@@ -115,3 +147,6 @@ async def _handle_async(workflow_ref: ActionRef, token: str | None) -> tuple[Wor
             pinned_lines.append(re.sub(r"((uses:\s+)([^\s#]+)((\s+#)([^\n]+))?)(?=\n?)", pin, line))
 
         return workflow_file, pinned_lines
+
+if __name__ == "__main__":
+    app()
